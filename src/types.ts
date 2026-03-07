@@ -7,7 +7,9 @@ export interface DataEntry {
 export interface DataStructureInfo {
   title: string;
   description: string;
+  longDescription: string;
   type: 'linear' | 'non-linear';
   icon: string;
   details: string[];
+  visualExample: string; // Key for visual component
 }
