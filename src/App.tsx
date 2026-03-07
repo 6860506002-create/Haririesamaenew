@@ -11,7 +11,8 @@ import {
   Code2,
   Cpu,
   Gamepad2,
-  MousePointer2
+  MousePointer2,
+  RefreshCw
 } from 'lucide-react';
 import { DataEntry, DataStructureInfo } from './types';
 import { DataStructureCard } from './components/DataStructureCard';
@@ -86,8 +87,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'learn' | 'play' | 'db'>('learn');
   const [selectedStructure, setSelectedStructure] = useState<DataStructureInfo | null>(null);
   const [dbStatus, setDbStatus] = useState<{ status: string; error?: string }>({ status: 'checking' });
+  const [isSaving, setIsSaving] = useState(false);
 
   const fetchStatus = async () => {
+    setDbStatus(prev => ({ ...prev, status: 'checking' }));
     try {
       const res = await fetch('/api/status');
       const json = await res.json();
@@ -110,6 +113,7 @@ export default function App() {
   };
 
   const handleAdd = async (value: string) => {
+    setIsSaving(true);
     setLoading(true);
     try {
       await fetch('/api/add', {
@@ -122,10 +126,12 @@ export default function App() {
       console.error("Failed to add data", err);
     } finally {
       setLoading(false);
+      setIsSaving(false);
     }
   };
 
   const handleDelete = async (id: number) => {
+    setIsSaving(true);
     setLoading(true);
     try {
       await fetch('/api/delete', {
@@ -138,11 +144,13 @@ export default function App() {
       console.error("Failed to delete data", err);
     } finally {
       setLoading(false);
+      setIsSaving(false);
     }
   };
 
   const handleReset = async () => {
-    if (!confirm("คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลทั้งหมด?")) return;
+    if (!confirm("คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลทั้งหมดจากฐานข้อมูล? การกระทำนี้ไม่สามารถย้อนกลับได้")) return;
+    setIsSaving(true);
     setLoading(true);
     try {
       await fetch('/api/reset', { method: 'POST' });
@@ -151,31 +159,50 @@ export default function App() {
       console.error("Failed to reset data", err);
     } finally {
       setLoading(false);
+      setIsSaving(false);
     }
   };
 
   useEffect(() => {
     fetchStatus();
     fetchData();
-    // Refresh data every 5 seconds to simulate real-time for multi-device
-    const interval = setInterval(fetchData, 5000);
+    // Refresh data every 3 seconds for better multi-device sync
+    const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <div className="min-h-screen pb-24">
+      {/* Saving Indicator */}
+      {isSaving && (
+        <div className="fixed top-4 left-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full glass-panel border border-white/20 text-[10px] font-bold text-white/70">
+          <div className="w-2 h-2 rounded-full bg-white animate-ping" />
+          <span>SAVING...</span>
+        </div>
+      )}
+
       {/* DB Status Indicator */}
       <div className="fixed top-4 right-4 z-50">
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full glass-panel border text-[10px] font-bold uppercase tracking-wider ${
-          dbStatus.status === 'connected' ? 'border-emerald-500/50 text-emerald-400' : 
-          dbStatus.status === 'error' ? 'border-red-500/50 text-red-400' : 'border-yellow-500/50 text-yellow-400'
-        }`}>
-          <div className={`w-2 h-2 rounded-full animate-pulse ${
-            dbStatus.status === 'connected' ? 'bg-emerald-500' : 
-            dbStatus.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+        <button 
+          onClick={() => {
+            setActiveTab('db');
+            fetchStatus();
+          }}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-full glass-panel border text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-lg ${
+            dbStatus.status === 'connected' ? 'border-emerald-500/50 text-emerald-400' : 
+            dbStatus.status === 'error' ? 'border-red-500/50 text-red-400' : 'border-blue-500/50 text-blue-400'
+          }`}
+        >
+          <div className={`w-2 h-2 rounded-full ${
+            dbStatus.status === 'connected' ? 'bg-emerald-500 animate-pulse' : 
+            dbStatus.status === 'error' ? 'bg-red-500' : 'bg-blue-500'
           }`} />
-          <span>MariaDB: {dbStatus.status}</span>
-        </div>
+          <span>
+            {dbStatus.status === 'connected' ? 'MariaDB: Online' : 
+             dbStatus.status === 'error' ? 'MariaDB: Error' : 
+             dbStatus.status === 'checking' ? 'Checking...' : 'Local Storage'}
+          </span>
+        </button>
       </div>
       {/* Navigation Bar */}
       <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 w-full max-w-md">
@@ -303,54 +330,130 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="grid grid-cols-1 lg:grid-cols-2 gap-12"
+              className="space-y-12"
             >
-              <InteractivePanel onAdd={handleAdd} onReset={handleReset} loading={loading} />
-
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold">ข้อมูลที่บันทึกไว้</h2>
-                  <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-gray-400">
-                    {data.length} รายการ
-                  </span>
+              {/* Database Status Section */}
+              <div className="glass-panel p-8 rounded-3xl border-white/10 overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <Database size={120} />
                 </div>
+                
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className={`p-3 rounded-2xl ${dbStatus.status === 'connected' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                      <Database className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">การเชื่อมต่อฐานข้อมูล</h2>
+                      <p className="text-white/50 text-sm">จัดการการบันทึกข้อมูล MariaDB SQL</p>
+                    </div>
+                  </div>
 
-                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                  <AnimatePresence mode="popLayout">
-                    {data.length === 0 ? (
-                      <div className="p-12 rounded-3xl border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-600 gap-4">
-                        <Database size={48} strokeWidth={1} />
-                        <p className="text-sm">ยังไม่มีข้อมูลในฐานข้อมูล</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">สถานะปัจจุบัน</span>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md ${
+                          dbStatus.status === 'connected' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'
+                        }`}>
+                          {dbStatus.status === 'connected' ? 'MariaDB SQL Online' : 'Local Storage Active'}
+                        </span>
                       </div>
-                    ) : (
-                      data.map((entry) => (
-                        <motion.div
-                          key={entry.id}
-                          layout
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          className="group p-4 rounded-2xl glass-panel flex items-center justify-between hover:border-brand-accent/30 transition-all"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="data-node">{entry.id}</div>
-                            <div>
-                              <p className="font-medium text-white">{entry.value}</p>
-                              <p className="text-[10px] text-gray-500 font-mono">
-                                {new Date(entry.created_at).toLocaleString('th-TH')}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleDelete(entry.id)}
-                            className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                      <p className="text-sm text-white/70 leading-relaxed">
+                        {dbStatus.status === 'connected' 
+                          ? "ข้อมูลของคุณถูกบันทึกไปยัง MariaDB SQL และจะซิงค์กับทุกอุปกรณ์โดยอัตโนมัติ" 
+                          : "ยังไม่ได้ตั้งค่า MariaDB ข้อมูลจะถูกบันทึกไว้ในไฟล์ชั่วคราวบนเซิร์ฟเวอร์นี้"}
+                      </p>
+                      {dbStatus.error && (
+                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-[10px] text-red-400 font-mono break-all">
+                          Error: {dbStatus.error}
+                        </div>
+                      )}
+                      <button 
+                        onClick={fetchStatus}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all font-bold text-xs"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${dbStatus.status === 'checking' ? 'animate-spin' : ''}`} />
+                        ตรวจสอบการเชื่อมต่อใหม่
+                      </button>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 block mb-2">การจัดการข้อมูล</span>
+                        <p className="text-sm text-white/70 mb-4">
+                          ล้างข้อมูลทั้งหมดออกจากฐานข้อมูล (ใช้เมื่อต้องการเริ่มต้นใหม่)
+                        </p>
+                      </div>
+                      <button 
+                        onClick={handleReset}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-all font-bold text-xs text-red-400"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        รีเซ็ตฐานข้อมูลทั้งหมด
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <InteractivePanel onAdd={handleAdd} onReset={handleReset} loading={loading} />
+
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold">ข้อมูลที่บันทึกไว้</h2>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={fetchData}
+                        className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/50 hover:text-white"
+                        title="รีเฟรชข้อมูล"
+                      >
+                        <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                      </button>
+                      <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-gray-400">
+                        {data.length} รายการ
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                    <AnimatePresence mode="popLayout">
+                      {data.length === 0 ? (
+                        <div className="p-12 rounded-3xl border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-600 gap-4">
+                          <Database size={48} strokeWidth={1} />
+                          <p className="text-sm">ยังไม่มีข้อมูลในฐานข้อมูล</p>
+                        </div>
+                      ) : (
+                        data.map((entry) => (
+                          <motion.div
+                            key={entry.id}
+                            layout
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="group p-4 rounded-2xl glass-panel flex items-center justify-between hover:border-brand-accent/30 transition-all"
                           >
-                            <Trash2 size={18} />
-                          </button>
-                        </motion.div>
-                      ))
-                    )}
-                  </AnimatePresence>
+                            <div className="flex items-center gap-4">
+                              <div className="data-node">{entry.id}</div>
+                              <div>
+                                <p className="font-medium text-white">{entry.value}</p>
+                                <p className="text-[10px] text-gray-500 font-mono">
+                                  {new Date(entry.created_at).toLocaleString('th-TH')}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleDelete(entry.id)}
+                              className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </motion.div>
+                        ))
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
             </motion.div>

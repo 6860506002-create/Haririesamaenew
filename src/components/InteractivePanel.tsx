@@ -54,8 +54,8 @@ export const InteractivePanel: React.FC<Props> = ({ onAdd, onReset, loading }) =
         <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
           <span className="text-[10px] uppercase tracking-widest text-gray-500 block mb-1">สถานะ</span>
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-brand-accent animate-pulse" />
-            <span className="text-sm font-medium">เชื่อมต่อฐานข้อมูลแล้ว</span>
+            <div className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-500 animate-pulse' : 'bg-brand-accent'}`} />
+            <span className="text-sm font-medium">{loading ? 'กำลังประมวลผล...' : 'พร้อมใช้งาน'}</span>
           </div>
         </div>
         <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
