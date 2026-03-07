@@ -1,7 +1,6 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import mysql from "mysql2/promise";
-import Database from "better-sqlite3";
 import path from "path";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -14,16 +13,13 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// Database Setup
-// We'll try MariaDB first as requested, but fallback to SQLite for the preview environment
-// so the user can actually use the app immediately.
-let dbType: 'mariadb' | 'sqlite' = 'sqlite';
+// MariaDB Setup
 let mariaPool: mysql.Pool | null = null;
-let sqliteDb: any = null;
+let dbStatus: 'connected' | 'error' | 'disconnected' = 'disconnected';
+let dbErrorMessage: string = "";
 
 async function initDb() {
   try {
-    // Attempt MariaDB connection if environment variables are provided
     if (process.env.DB_HOST && process.env.DB_USER) {
       mariaPool = mysql.createPool({
         host: process.env.DB_HOST,
@@ -31,6 +27,9 @@ async function initDb() {
         password: process.env.DB_PASSWORD,
         database: process.env.DB_NAME,
         port: parseInt(process.env.DB_PORT || "3306"),
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
       });
       
       // Test connection
@@ -44,33 +43,27 @@ async function initDb() {
         )
       `);
       connection.release();
-      dbType = 'mariadb';
+      dbStatus = 'connected';
     } else {
-      throw new Error("MariaDB env vars missing, falling back to SQLite");
+      dbStatus = 'disconnected';
+      dbErrorMessage = "MariaDB environment variables (DB_HOST, DB_USER, etc.) are missing.";
     }
   } catch (error) {
-    console.log("MariaDB connection failed or not configured. Using SQLite for preview.");
-    sqliteDb = new Database("ds_learning.db");
-    sqliteDb.exec(`
-      CREATE TABLE IF NOT EXISTS data_entries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        value TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    dbType = 'sqlite';
+    console.error("MariaDB connection failed:", error);
+    dbStatus = 'error';
+    dbErrorMessage = (error as Error).message;
   }
 }
 
 // API Routes
+app.get("/api/status", (req, res) => {
+  res.json({ status: dbStatus, error: dbErrorMessage });
+});
+
 app.get("/api/get", async (req, res) => {
   try {
-    let rows;
-    if (dbType === 'mariadb' && mariaPool) {
-      [rows] = await mariaPool.query("SELECT * FROM data_entries ORDER BY created_at DESC");
-    } else {
-      rows = sqliteDb.prepare("SELECT * FROM data_entries ORDER BY created_at DESC").all();
-    }
+    if (!mariaPool) throw new Error("Database not connected");
+    const [rows] = await mariaPool.query("SELECT * FROM data_entries ORDER BY created_at DESC");
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -82,11 +75,8 @@ app.post("/api/add", async (req, res) => {
   if (!value) return res.status(400).json({ error: "Value is required" });
   
   try {
-    if (dbType === 'mariadb' && mariaPool) {
-      await mariaPool.query("INSERT INTO data_entries (value) VALUES (?)", [value]);
-    } else {
-      sqliteDb.prepare("INSERT INTO data_entries (value) VALUES (?)").run(value);
-    }
+    if (!mariaPool) throw new Error("Database not connected");
+    await mariaPool.query("INSERT INTO data_entries (value) VALUES (?)", [value]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -98,11 +88,8 @@ app.post("/api/delete", async (req, res) => {
   if (!id) return res.status(400).json({ error: "ID is required" });
   
   try {
-    if (dbType === 'mariadb' && mariaPool) {
-      await mariaPool.query("DELETE FROM data_entries WHERE id = ?", [id]);
-    } else {
-      sqliteDb.prepare("DELETE FROM data_entries WHERE id = ?").run(id);
-    }
+    if (!mariaPool) throw new Error("Database not connected");
+    await mariaPool.query("DELETE FROM data_entries WHERE id = ?", [id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -111,11 +98,8 @@ app.post("/api/delete", async (req, res) => {
 
 app.post("/api/reset", async (req, res) => {
   try {
-    if (dbType === 'mariadb' && mariaPool) {
-      await mariaPool.query("DELETE FROM data_entries");
-    } else {
-      sqliteDb.prepare("DELETE FROM data_entries").run();
-    }
+    if (!mariaPool) throw new Error("Database not connected");
+    await mariaPool.query("DELETE FROM data_entries");
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -124,7 +108,6 @@ app.post("/api/reset", async (req, res) => {
 
 async function startServer() {
   await initDb();
-
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -132,14 +115,15 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT} (Mode: ${dbType})`);
+    console.log(`Server running on http://localhost:${PORT} (Database: MariaDB)`);
   });
 }
 

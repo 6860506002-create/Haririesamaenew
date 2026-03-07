@@ -85,12 +85,25 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'learn' | 'play' | 'db'>('learn');
   const [selectedStructure, setSelectedStructure] = useState<DataStructureInfo | null>(null);
+  const [dbStatus, setDbStatus] = useState<{ status: string; error?: string }>({ status: 'checking' });
+
+  const fetchStatus = async () => {
+    try {
+      const res = await fetch('/api/status');
+      const json = await res.json();
+      setDbStatus(json);
+    } catch (err) {
+      setDbStatus({ status: 'error', error: 'Failed to connect to server' });
+    }
+  };
 
   const fetchData = async () => {
     try {
       const res = await fetch('/api/get');
       const json = await res.json();
-      setData(json);
+      if (Array.isArray(json)) {
+        setData(json);
+      }
     } catch (err) {
       console.error("Failed to fetch data", err);
     }
@@ -142,11 +155,28 @@ export default function App() {
   };
 
   useEffect(() => {
+    fetchStatus();
     fetchData();
+    // Refresh data every 5 seconds to simulate real-time for multi-device
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
     <div className="min-h-screen pb-24">
+      {/* DB Status Indicator */}
+      <div className="fixed top-4 right-4 z-50">
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full glass-panel border text-[10px] font-bold uppercase tracking-wider ${
+          dbStatus.status === 'connected' ? 'border-emerald-500/50 text-emerald-400' : 
+          dbStatus.status === 'error' ? 'border-red-500/50 text-red-400' : 'border-yellow-500/50 text-yellow-400'
+        }`}>
+          <div className={`w-2 h-2 rounded-full animate-pulse ${
+            dbStatus.status === 'connected' ? 'bg-emerald-500' : 
+            dbStatus.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+          }`} />
+          <span>MariaDB: {dbStatus.status}</span>
+        </div>
+      </div>
       {/* Navigation Bar */}
       <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 w-full max-w-md">
         <div className="glass-panel p-2 rounded-2xl flex items-center justify-between shadow-2xl border-white/20">
