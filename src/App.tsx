@@ -441,7 +441,7 @@ export default function App() {
                           ? "ข้อมูลของคุณถูกบันทึกไปยัง MariaDB SQL และจะซิงค์กับทุกอุปกรณ์โดยอัตโนมัติ" 
                           : "ยังไม่ได้ตั้งค่า MariaDB ข้อมูลจะถูกบันทึกไว้ในไฟล์ชั่วคราวบนเซิร์ฟเวอร์นี้"}
                       </p>
-                      {dbStatus.error && (
+                      {dbStatus.status === 'error' && dbStatus.error && (
                         <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-[10px] text-red-400 font-mono break-all">
                           Error: {dbStatus.error}
                         </div>
@@ -538,14 +538,18 @@ export default function App() {
         </AnimatePresence>
 
         {/* Detail Modal */}
-        <DataStructureModal 
-          structure={selectedStructure} 
-          onClose={() => setSelectedStructure(null)}
-          onPlay={() => {
-            setSelectedStructure(null);
-            setActiveTab('play');
-          }}
-        />
+        <AnimatePresence>
+          {selectedStructure && (
+            <DataStructureModal 
+              structure={selectedStructure} 
+              onClose={() => setSelectedStructure(null)}
+              onPlay={() => {
+                setSelectedStructure(null);
+                setActiveTab('play');
+              }}
+            />
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );

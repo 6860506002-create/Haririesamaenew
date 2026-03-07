@@ -10,8 +10,6 @@ interface Props {
 }
 
 export const DataStructureModal: React.FC<Props> = ({ structure, onClose, onPlay }) => {
-  if (!structure) return null;
-
   const renderVisual = () => {
     switch (structure.visualExample) {
       case 'array':
@@ -95,8 +93,7 @@ export const DataStructureModal: React.FC<Props> = ({ structure, onClose, onPlay
   };
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -164,6 +161,5 @@ export const DataStructureModal: React.FC<Props> = ({ structure, onClose, onPlay
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
   );
 };

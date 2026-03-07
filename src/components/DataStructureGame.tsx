@@ -264,14 +264,15 @@ export const DataStructureGame: React.FC<DataStructureGameProps> = ({
         <div className="flex gap-2">
           <button
             onClick={handleAdd}
-            className="flex-1 sm:flex-none px-4 py-3 rounded-xl bg-brand-accent text-brand-bg font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2"
+            disabled={loading || !inputValue.trim()}
+            className="flex-1 sm:flex-none px-4 py-3 rounded-xl bg-brand-accent text-brand-bg font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <Plus size={18} />
             เพิ่ม
           </button>
           <button
             onClick={handleRemove}
-            disabled={data.length === 0 && activeDS !== 'tree'}
+            disabled={loading || (dbData.length === 0)}
             className="flex-1 sm:flex-none px-4 py-3 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 font-bold hover:bg-red-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-30"
           >
             <Minus size={18} />
@@ -287,7 +288,8 @@ export const DataStructureGame: React.FC<DataStructureGameProps> = ({
           )}
           <button
             onClick={onReset}
-            className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all flex items-center gap-2"
+            disabled={loading}
+            className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all flex items-center gap-2 disabled:opacity-50"
           >
             <RefreshCcw size={18} className={loading ? 'animate-spin' : ''} />
             <span className="text-xs font-bold">ล้างข้อมูล</span>

@@ -85,7 +85,7 @@ async function initDb() {
     }
   } catch (error) {
     console.error("MariaDB connection failed. Falling back to SQLite.", error);
-    dbStatus = 'error';
+    dbStatus = 'local';
     dbErrorMessage = (error as Error).message;
   }
 }
