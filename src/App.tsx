@@ -12,7 +12,9 @@ import {
   Cpu,
   Gamepad2,
   MousePointer2,
-  RefreshCw
+  RefreshCw,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 import { DataEntry, DataStructureInfo } from './types';
 import { DataStructureCard } from './components/DataStructureCard';
@@ -84,7 +86,7 @@ const NON_LINEAR_STRUCTURES: DataStructureInfo[] = [
 export default function App() {
   const [data, setData] = useState<DataEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'learn' | 'play' | 'db'>('learn');
+  const [activeTab, setActiveTab] = useState<'learn' | 'play' | 'db' | 'env'>('learn');
   const [selectedStructure, setSelectedStructure] = useState<DataStructureInfo | null>(null);
   const [dbStatus, setDbStatus] = useState<{ status: string; error?: string }>({ status: 'checking' });
   const [isSaving, setIsSaving] = useState(false);
@@ -240,6 +242,13 @@ export default function App() {
             <Database size={20} />
             <span className="text-[10px] font-bold uppercase">ฐานข้อมูล</span>
           </button>
+          <button 
+            onClick={() => setActiveTab('env')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl transition-all ${activeTab === 'env' ? 'bg-brand-accent text-brand-bg' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Globe size={20} />
+            <span className="text-[10px] font-bold uppercase">ลิ้งค์รวม</span>
+          </button>
         </div>
       </nav>
 
@@ -373,6 +382,107 @@ export default function App() {
                   ))}
                 </div>
               </section>
+            </motion.div>
+          )}
+
+          {activeTab === 'env' && (
+            <motion.div
+              key="env"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8"
+            >
+              <div className="flex items-center gap-4">
+                <h2 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
+                  <Globe className="text-brand-accent" />
+                  สภาพแวดล้อมและลิ้งค์รวม
+                </h2>
+                <div className="h-px flex-1 bg-white/10" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="glass-panel p-8 rounded-3xl border-white/10 space-y-6">
+                   <h3 className="text-xl font-bold">Application Links</h3>
+                   <div className="space-y-4">
+                      <a 
+                        href="https://ais-dev-tkii4lmcw7kgyhxo3n33kf-426535942295.asia-southeast1.run.app" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400">
+                            <Code2 size={18} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm">Development URL</p>
+                            <p className="text-[10px] text-white/40">ลิ้งค์สำหรับพัฒนาและทดสอบ</p>
+                          </div>
+                        </div>
+                        <ExternalLink size={16} className="text-white/20 group-hover:text-white transition-colors" />
+                      </a>
+
+                      <a 
+                        href="https://ais-pre-tkii4lmcw7kgyhxo3n33kf-426535942295.asia-southeast1.run.app" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
+                            <Globe size={18} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm">Shared Preview URL</p>
+                            <p className="text-[10px] text-white/40">ลิ้งค์สำหรับแชร์ให้ผู้อื่นเข้าชม</p>
+                          </div>
+                        </div>
+                        <ExternalLink size={16} className="text-white/20 group-hover:text-white transition-colors" />
+                      </a>
+                   </div>
+                </div>
+
+                <div className="glass-panel p-8 rounded-3xl border-white/10 space-y-6">
+                   <h3 className="text-xl font-bold">แหล่งเรียนรู้เพิ่มเติม</h3>
+                   <div className="space-y-4">
+                      <a 
+                        href="https://www.geeksforgeeks.org/data-structures/" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-orange-500/20 text-orange-400">
+                            <GitBranch size={18} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm">GeeksforGeeks DS</p>
+                            <p className="text-[10px] text-white/40">คู่มือโครงสร้างข้อมูลฉบับสมบูรณ์</p>
+                          </div>
+                        </div>
+                        <ExternalLink size={16} className="text-white/20 group-hover:text-white transition-colors" />
+                      </a>
+                      <a 
+                        href="https://visualgo.net/en" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
+                            <Cpu size={18} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm">VisuAlgo</p>
+                            <p className="text-[10px] text-white/40">แอนิเมชันประกอบอัลกอริทึม</p>
+                          </div>
+                        </div>
+                        <ExternalLink size={16} className="text-white/20 group-hover:text-white transition-colors" />
+                      </a>
+                   </div>
+                </div>
+              </div>
             </motion.div>
           )}
 
