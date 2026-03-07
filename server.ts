@@ -21,20 +21,32 @@ let dbStatus: 'connected' | 'error' | 'local' = 'local';
 let dbErrorMessage: string = "";
 
 async function initDb() {
+  // Close existing pool if retrying
+  if (mariaPool) {
+    try {
+      await mariaPool.end();
+      mariaPool = null;
+    } catch (e) {
+      console.error("Error closing old pool:", e);
+    }
+  }
+
   // Initialize SQLite as fallback first
-  try {
-    const sqlitePath = path.join(process.cwd(), "local_data.db");
-    sqliteDb = new Database(sqlitePath);
-    sqliteDb.exec(`
-      CREATE TABLE IF NOT EXISTS data_entries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        value TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log("Local SQLite initialized as fallback.");
-  } catch (err) {
-    console.error("Failed to initialize SQLite fallback:", err);
+  if (!sqliteDb) {
+    try {
+      const sqlitePath = path.join(process.cwd(), "local_data.db");
+      sqliteDb = new Database(sqlitePath);
+      sqliteDb.exec(`
+        CREATE TABLE IF NOT EXISTS data_entries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          value TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log("Local SQLite initialized as fallback.");
+    } catch (err) {
+      console.error("Failed to initialize SQLite fallback:", err);
+    }
   }
 
   // Attempt MariaDB connection
@@ -80,6 +92,12 @@ async function initDb() {
 
 // API Routes
 app.get("/api/status", (req, res) => {
+  res.json({ status: dbStatus, error: dbErrorMessage });
+});
+
+app.post("/api/reconnect", async (req, res) => {
+  console.log("Retrying database connection...");
+  await initDb();
   res.json({ status: dbStatus, error: dbErrorMessage });
 });
 

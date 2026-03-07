@@ -14,6 +14,8 @@ import {
   ArrowRight
 } from 'lucide-react';
 
+import { DataEntry } from '../types';
+
 type DSType = 'array' | 'stack' | 'queue' | 'linkedlist' | 'tree' | 'graph';
 
 interface Node {
@@ -22,72 +24,75 @@ interface Node {
   children?: Node[];
 }
 
-export const DataStructureGame: React.FC = () => {
+interface DataStructureGameProps {
+  dbData: DataEntry[];
+  onAdd: (value: string) => Promise<void>;
+  onDelete: (id: number) => Promise<void>;
+  onReset: () => Promise<void>;
+  loading: boolean;
+}
+
+export const DataStructureGame: React.FC<DataStructureGameProps> = ({ 
+  dbData, 
+  onAdd, 
+  onDelete, 
+  onReset,
+  loading 
+}) => {
   const [activeDS, setActiveDS] = useState<DSType>('stack');
-  const [data, setData] = useState<string[]>(['A', 'B', 'C']);
   const [inputValue, setInputValue] = useState('');
   const [searchIndex, setSearchIndex] = useState<number | null>(null);
+
+  // Map database data to string array for visualization
+  const data = dbData.map(d => d.value);
 
   // For Tree/Graph visualization (simplified)
   const [treeData, setTreeData] = useState<Node>({
     id: 'root',
     value: 'Root',
-    children: [
-      { id: 'c1', value: 'Child 1', children: [] },
-      { id: 'c2', value: 'Child 2', children: [] }
-    ]
+    children: []
   });
 
-  const handleAdd = () => {
-    if (!inputValue.trim()) return;
-    const val = inputValue.trim();
-    
-    switch (activeDS) {
-      case 'array':
-        setData([...data, val]);
-        break;
-      case 'stack':
-        setData([val, ...data]);
-        break;
-      case 'queue':
-        setData([...data, val]);
-        break;
-      case 'linkedlist':
-        setData([...data, val]);
-        break;
-      case 'tree':
-        // Simple tree add: add to first child that has space
-        const newTree = { ...treeData };
-        if (newTree.children) {
-          newTree.children.push({ id: Date.now().toString(), value: val, children: [] });
-        }
-        setTreeData(newTree);
-        break;
+  // Update tree visualization when dbData changes
+  useEffect(() => {
+    if (activeDS === 'tree') {
+      const newChildren = dbData.map(d => ({ id: d.id.toString(), value: d.value, children: [] }));
+      setTreeData({ id: 'root', value: 'Root', children: newChildren });
     }
+  }, [dbData, activeDS]);
+
+  const handleAdd = async () => {
+    if (!inputValue.trim() || loading) return;
+    await onAdd(inputValue.trim());
     setInputValue('');
   };
 
-  const handleRemove = () => {
+  const handleRemove = async () => {
+    if (dbData.length === 0 || loading) return;
+    
+    let idToDelete: number | null = null;
+
     switch (activeDS) {
       case 'array':
-        setData(data.slice(0, -1));
+      case 'linkedlist':
+      case 'tree':
+        // Delete last added
+        idToDelete = dbData[dbData.length - 1].id;
         break;
       case 'stack':
-        setData(data.slice(1));
+        // LIFO: Delete first in list (which is the most recent in our display logic usually, 
+        // but let's stick to the database order. In App.tsx, data is returned in order of creation.
+        // So last in is last in array.)
+        idToDelete = dbData[dbData.length - 1].id;
         break;
       case 'queue':
-        setData(data.slice(1));
+        // FIFO: Delete first in array
+        idToDelete = dbData[0].id;
         break;
-      case 'linkedlist':
-        setData(data.slice(0, -1));
-        break;
-      case 'tree':
-        const newTree = { ...treeData };
-        if (newTree.children && newTree.children.length > 0) {
-          newTree.children.pop();
-        }
-        setTreeData(newTree);
-        break;
+    }
+
+    if (idToDelete !== null) {
+      await onDelete(idToDelete);
     }
   };
 
@@ -229,7 +234,6 @@ export const DataStructureGame: React.FC = () => {
               key={key}
               onClick={() => {
                 setActiveDS(key);
-                setData(['A', 'B', 'C']);
               }}
               className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 border ${
                 activeDS === key 
@@ -282,13 +286,11 @@ export const DataStructureGame: React.FC = () => {
             </button>
           )}
           <button
-            onClick={() => {
-              setData([]);
-              setTreeData({ id: 'root', value: 'Root', children: [] });
-            }}
-            className="p-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all"
+            onClick={onReset}
+            className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all flex items-center gap-2"
           >
-            <RefreshCcw size={18} />
+            <RefreshCcw size={18} className={loading ? 'animate-spin' : ''} />
+            <span className="text-xs font-bold">ล้างข้อมูล</span>
           </button>
         </div>
       </div>

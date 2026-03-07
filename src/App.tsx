@@ -89,10 +89,12 @@ export default function App() {
   const [dbStatus, setDbStatus] = useState<{ status: string; error?: string }>({ status: 'checking' });
   const [isSaving, setIsSaving] = useState(false);
 
-  const fetchStatus = async () => {
+  const fetchStatus = async (isRetry = false) => {
     setDbStatus(prev => ({ ...prev, status: 'checking' }));
     try {
-      const res = await fetch('/api/status');
+      const endpoint = isRetry ? '/api/reconnect' : '/api/status';
+      const method = isRetry ? 'POST' : 'GET';
+      const res = await fetch(endpoint, { method });
       const json = await res.json();
       setDbStatus(json);
     } catch (err) {
@@ -183,26 +185,36 @@ export default function App() {
 
       {/* DB Status Indicator */}
       <div className="fixed top-4 right-4 z-50">
-        <button 
-          onClick={() => {
-            setActiveTab('db');
-            fetchStatus();
-          }}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-full glass-panel border text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-lg ${
-            dbStatus.status === 'connected' ? 'border-emerald-500/50 text-emerald-400' : 
-            dbStatus.status === 'error' ? 'border-red-500/50 text-red-400' : 'border-blue-500/50 text-blue-400'
-          }`}
-        >
-          <div className={`w-2 h-2 rounded-full ${
-            dbStatus.status === 'connected' ? 'bg-emerald-500 animate-pulse' : 
-            dbStatus.status === 'error' ? 'bg-red-500' : 'bg-blue-500'
-          }`} />
-          <span>
-            {dbStatus.status === 'connected' ? 'MariaDB: Online' : 
-             dbStatus.status === 'error' ? 'MariaDB: Error' : 
-             dbStatus.status === 'checking' ? 'Checking...' : 'Local Storage'}
-          </span>
-        </button>
+        <div className="flex flex-col items-end gap-2">
+          <button 
+            onClick={() => {
+              setActiveTab('db');
+              fetchStatus(true);
+            }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full glass-panel border text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-lg ${
+              dbStatus.status === 'connected' ? 'border-emerald-500/50 text-emerald-400' : 
+              dbStatus.status === 'error' ? 'border-red-500/50 text-red-400' : 'border-blue-500/50 text-blue-400'
+            }`}
+          >
+            <div className={`w-2 h-2 rounded-full ${
+              dbStatus.status === 'connected' ? 'bg-emerald-500 animate-pulse' : 
+              dbStatus.status === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            }`} />
+            <span>
+              {dbStatus.status === 'connected' ? 'MariaDB: Online' : 
+               dbStatus.status === 'error' ? 'MariaDB: Connection Error' : 
+               dbStatus.status === 'checking' ? 'Checking...' : 'Local Storage'}
+            </span>
+          </button>
+          
+          {dbStatus.status === 'error' && dbStatus.error && (
+            <div className="max-w-[250px] p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-[9px] text-red-300 backdrop-blur-md animate-in fade-in slide-in-from-top-1">
+              <p className="font-bold mb-1">Error Details:</p>
+              <p className="opacity-80 line-clamp-3">{dbStatus.error}</p>
+              <p className="mt-1 italic opacity-60">*แอปกำลังใช้ Local Storage แทนชั่วคราว</p>
+            </div>
+          )}
+        </div>
       </div>
       {/* Navigation Bar */}
       <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 w-full max-w-md">
@@ -263,6 +275,65 @@ export default function App() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-24"
             >
+              {/* Quick Summary Section */}
+              <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-6 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <RefreshCw size={20} />
+                  </div>
+                  <h3 className="font-bold text-lg">Real-time Sync</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">ข้อมูลเชื่อมต่อกับ MariaDB SQL ตลอดเวลา บันทึกอัตโนมัติทุกครั้งที่เพิ่มหรือลบ</p>
+                </div>
+                <div className="p-6 rounded-3xl bg-blue-500/10 border border-blue-500/20 space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
+                    <MousePointer2 size={20} />
+                  </div>
+                  <h3 className="font-bold text-lg">Interactive Play</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">ทดลองใช้งานโครงสร้างข้อมูลจริงผ่าน Playground ที่จำลองการทำงานแบบ LIFO, FIFO และ Indexing</p>
+                </div>
+                <div className="p-6 rounded-3xl bg-purple-500/10 border border-purple-500/20 space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400">
+                    <Layers size={20} />
+                  </div>
+                  <h3 className="font-bold text-lg">Multi-Device</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">เล่นเครื่องไหนข้อมูลก็ยังอยู่เหมือนเดิม ไม่รีเซ็ตเองจนกว่าคุณจะสั่งล้างข้อมูล</p>
+                </div>
+              </section>
+
+              {/* Introduction Section */}
+              <section className="glass-panel p-8 rounded-3xl border-white/10 space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 text-[10px] font-bold uppercase tracking-widest">
+                      Definition
+                    </div>
+                    <h2 className="text-3xl font-bold text-white">โครงสร้างข้อมูลเชิงเส้น</h2>
+                    <p className="text-gray-400 leading-relaxed">
+                      <span className="text-brand-accent font-bold">(Linear Data Structures)</span> คือ โครงสร้างข้อมูลที่สมาชิกแต่ละตัวจะเชื่อมกับสมาชิกตัวถัดไปเพียงตัวเดียวและมีลำดับที่ต่อเนื่อง
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {['Array', 'Stack', 'Linked-List', 'Queue'].map(tag => (
+                        <span key={tag} className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[10px] text-gray-500">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-400 text-[10px] font-bold uppercase tracking-widest">
+                      Definition
+                    </div>
+                    <h2 className="text-3xl font-bold text-white">โครงสร้างข้อมูลไม่เชิงเส้น</h2>
+                    <p className="text-gray-400 leading-relaxed">
+                      <span className="text-brand-accent font-bold">(Non-Linear Data Structures)</span> คือ โครงสร้างที่ไม่มีคุณสมบัติของเชิงเส้น สามารถใช้แสดงความสัมพันธ์ของข้อมูลที่ซับซ้อนได้มากกว่าโครงสร้างข้อมูลแบบเชิงเส้น หมายถึงข้อมูลหนึ่งตัวมีความสัมพันธ์กับข้อมูลอื่นได้หลายตัว
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {['Tree', 'Graph'].map(tag => (
+                        <span key={tag} className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[10px] text-gray-500">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
               {/* Linear Section */}
               <section className="space-y-8">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -320,7 +391,13 @@ export default function App() {
                 </h2>
                 <div className="h-px flex-1 bg-white/10" />
               </div>
-              <DataStructureGame />
+              <DataStructureGame 
+                dbData={data} 
+                onAdd={handleAdd} 
+                onDelete={handleDelete} 
+                onReset={handleReset}
+                loading={loading}
+              />
             </motion.div>
           )}
 
@@ -370,7 +447,7 @@ export default function App() {
                         </div>
                       )}
                       <button 
-                        onClick={fetchStatus}
+                        onClick={() => fetchStatus(true)}
                         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all font-bold text-xs"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${dbStatus.status === 'checking' ? 'animate-spin' : ''}`} />
