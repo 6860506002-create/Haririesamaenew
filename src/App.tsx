@@ -90,6 +90,7 @@ export default function App() {
   const [selectedStructure, setSelectedStructure] = useState<DataStructureInfo | null>(null);
   const [dbStatus, setDbStatus] = useState<{ status: string; error?: string }>({ status: 'checking' });
   const [isSaving, setIsSaving] = useState(false);
+  const [isBrowserMode, setIsBrowserMode] = useState(false);
 
   const fetchStatus = async (isRetry = false) => {
     setDbStatus(prev => ({ ...prev, status: 'checking' }));
@@ -97,34 +98,62 @@ export default function App() {
       const endpoint = isRetry ? '/api/reconnect' : '/api/status';
       const method = isRetry ? 'POST' : 'GET';
       const res = await fetch(endpoint, { method });
+      if (!res.ok) throw new Error('Server unreachable');
       const json = await res.json();
       setDbStatus(json);
+      setIsBrowserMode(false);
     } catch (err) {
-      setDbStatus({ status: 'error', error: 'Failed to connect to server' });
+      console.warn("Backend server not found, switching to Browser Storage mode.");
+      setDbStatus({ status: 'browser', error: 'Server connection unavailable' });
+      setIsBrowserMode(true);
     }
   };
 
   const fetchData = async () => {
+    if (isBrowserMode) {
+      const localData = localStorage.getItem('ds_learning_hub_data');
+      if (localData) {
+        setData(JSON.parse(localData));
+      }
+      return;
+    }
+
     try {
       const res = await fetch('/api/get');
+      if (!res.ok) throw new Error('Fetch failed');
       const json = await res.json();
       if (Array.isArray(json)) {
         setData(json);
       }
     } catch (err) {
       console.error("Failed to fetch data", err);
+      // Fallback to local storage if fetch fails
+      const localData = localStorage.getItem('ds_learning_hub_data');
+      if (localData) setData(JSON.parse(localData));
     }
   };
 
   const handleAdd = async (value: string) => {
     setIsSaving(true);
     setLoading(true);
+
+    if (isBrowserMode) {
+      const newItem = { id: Date.now(), value, created_at: new Date().toISOString() };
+      const updatedData = [newItem, ...data];
+      setData(updatedData);
+      localStorage.setItem('ds_learning_hub_data', JSON.stringify(updatedData));
+      setIsSaving(false);
+      setLoading(false);
+      return;
+    }
+
     try {
-      await fetch('/api/add', {
+      const res = await fetch('/api/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value })
       });
+      if (!res.ok) throw new Error('Add failed');
       await fetchData();
     } catch (err) {
       console.error("Failed to add data", err);
@@ -137,12 +166,23 @@ export default function App() {
   const handleDelete = async (id: number) => {
     setIsSaving(true);
     setLoading(true);
+
+    if (isBrowserMode) {
+      const updatedData = data.filter(item => item.id !== id);
+      setData(updatedData);
+      localStorage.setItem('ds_learning_hub_data', JSON.stringify(updatedData));
+      setIsSaving(false);
+      setLoading(false);
+      return;
+    }
+
     try {
-      await fetch('/api/delete', {
+      const res = await fetch('/api/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
       });
+      if (!res.ok) throw new Error('Delete failed');
       await fetchData();
     } catch (err) {
       console.error("Failed to delete data", err);
@@ -153,11 +193,21 @@ export default function App() {
   };
 
   const handleReset = async () => {
-    if (!confirm("คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลทั้งหมดจากฐานข้อมูล? การกระทำนี้ไม่สามารถย้อนกลับได้")) return;
+    if (!confirm("คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้")) return;
     setIsSaving(true);
     setLoading(true);
+
+    if (isBrowserMode) {
+      setData([]);
+      localStorage.removeItem('ds_learning_hub_data');
+      setIsSaving(false);
+      setLoading(false);
+      return;
+    }
+
     try {
-      await fetch('/api/reset', { method: 'POST' });
+      const res = await fetch('/api/reset', { method: 'POST' });
+      if (!res.ok) throw new Error('Reset failed');
       await fetchData();
     } catch (err) {
       console.error("Failed to reset data", err);
@@ -200,11 +250,13 @@ export default function App() {
           >
             <div className={`w-2 h-2 rounded-full ${
               dbStatus.status === 'connected' ? 'bg-emerald-500 animate-pulse' : 
-              dbStatus.status === 'error' ? 'bg-red-500' : 'bg-blue-500'
+              dbStatus.status === 'error' ? 'bg-red-500' : 
+              dbStatus.status === 'browser' ? 'bg-amber-500' : 'bg-blue-500'
             }`} />
             <span>
               {dbStatus.status === 'connected' ? 'MariaDB: Online' : 
                dbStatus.status === 'error' ? 'MariaDB: Connection Error' : 
+               dbStatus.status === 'browser' ? 'Browser Storage (Vercel/Static)' :
                dbStatus.status === 'checking' ? 'Checking...' : 'Local Storage'}
             </span>
           </button>
@@ -214,6 +266,14 @@ export default function App() {
               <p className="font-bold mb-1">Error Details:</p>
               <p className="opacity-80 line-clamp-3">{dbStatus.error}</p>
               <p className="mt-1 italic opacity-60">*แอปกำลังใช้ Local Storage แทนชั่วคราว</p>
+            </div>
+          )}
+
+          {dbStatus.status === 'browser' && (
+            <div className="max-w-[250px] p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-300 backdrop-blur-md animate-in fade-in slide-in-from-top-1">
+              <p className="font-bold mb-1">Cloud/Static Mode:</p>
+              <p className="opacity-80">ไม่พบเซิร์ฟเวอร์ (เช่น บน Vercel) ระบบกำลังบันทึกข้อมูลในบราวเซอร์ของคุณแทน</p>
+              <p className="mt-1 italic opacity-60">*ข้อมูลจะหายไปหากล้างแคชบราวเซอร์</p>
             </div>
           )}
         </div>

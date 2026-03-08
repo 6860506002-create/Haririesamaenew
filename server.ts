@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import cors from "cors";
 import dotenv from "dotenv";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -17,39 +18,35 @@ app.use(express.json());
 // Database Setup
 let mariaPool: mysql.Pool | null = null;
 let sqliteDb: Database.Database | null = null;
-let dbStatus: 'connected' | 'error' | 'local' = 'local';
+let supabaseClient: any = null;
+let dbStatus: 'connected' | 'error' | 'local' | 'supabase' = 'local';
 let dbErrorMessage: string = "";
 
 async function initDb() {
-  // Close existing pool if retrying
-  if (mariaPool) {
+  // Reset status
+  dbStatus = 'local';
+  dbErrorMessage = "";
+
+  // 1. Try Supabase first (Cloud-friendly)
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+  if (supabaseUrl && supabaseKey) {
     try {
-      await mariaPool.end();
-      mariaPool = null;
+      supabaseClient = createClient(supabaseUrl, supabaseKey);
+      // Test connection by fetching one row
+      const { error } = await supabaseClient.from('data_entries').select('id').limit(1);
+      if (!error || error.code === 'PGRST116' || error.message.includes('does not exist')) {
+        console.log("Connected to Supabase successfully.");
+        dbStatus = 'supabase';
+        return;
+      }
     } catch (e) {
-      console.error("Error closing old pool:", e);
+      console.error("Supabase connection failed:", e);
     }
   }
 
-  // Initialize SQLite as fallback first
-  if (!sqliteDb) {
-    try {
-      const sqlitePath = path.join(process.cwd(), "local_data.db");
-      sqliteDb = new Database(sqlitePath);
-      sqliteDb.exec(`
-        CREATE TABLE IF NOT EXISTS data_entries (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          value TEXT NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      console.log("Local SQLite initialized as fallback.");
-    } catch (err) {
-      console.error("Failed to initialize SQLite fallback:", err);
-    }
-  }
-
-  // Attempt MariaDB connection
+  // 2. Try MariaDB (Traditional Server)
   try {
     const host = process.env.DB_HOST;
     const user = process.env.DB_USER;
@@ -64,10 +61,9 @@ async function initDb() {
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
-        connectTimeout: 10000 // 10s timeout
+        connectTimeout: 10000
       });
       
-      // Test connection
       const connection = await mariaPool.getConnection();
       console.log("Connected to MariaDB successfully.");
       await connection.query(`
@@ -79,14 +75,32 @@ async function initDb() {
       `);
       connection.release();
       dbStatus = 'connected';
-    } else {
-      console.log("MariaDB not configured. Using local SQLite.");
-      dbStatus = 'local';
+      return;
     }
   } catch (error) {
-    console.error("MariaDB connection failed. Falling back to SQLite.", error);
-    dbStatus = 'local';
+    console.error("MariaDB connection failed:", error);
     dbErrorMessage = (error as Error).message;
+  }
+
+  // 3. Fallback to SQLite (Local)
+  if (!sqliteDb) {
+    try {
+      const sqlitePath = path.join(process.cwd(), "local_data.db");
+      sqliteDb = new Database(sqlitePath);
+      sqliteDb.exec(`
+        CREATE TABLE IF NOT EXISTS data_entries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          value TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log("Local SQLite initialized as fallback.");
+      dbStatus = 'local';
+    } catch (err) {
+      console.error("Failed to initialize SQLite fallback:", err);
+      dbStatus = 'error';
+      dbErrorMessage = "All database connections failed (Supabase, MariaDB, SQLite)";
+    }
   }
 }
 
@@ -103,7 +117,14 @@ app.post("/api/reconnect", async (req, res) => {
 
 app.get("/api/get", async (req, res) => {
   try {
-    if (dbStatus === 'connected' && mariaPool) {
+    if (dbStatus === 'supabase' && supabaseClient) {
+      const { data, error } = await supabaseClient
+        .from('data_entries')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      res.json(data);
+    } else if (dbStatus === 'connected' && mariaPool) {
       const [rows] = await mariaPool.query("SELECT * FROM data_entries ORDER BY created_at DESC");
       res.json(rows);
     } else if (sqliteDb) {
@@ -122,7 +143,12 @@ app.post("/api/add", async (req, res) => {
   if (!value) return res.status(400).json({ error: "Value is required" });
   
   try {
-    if (dbStatus === 'connected' && mariaPool) {
+    if (dbStatus === 'supabase' && supabaseClient) {
+      const { error } = await supabaseClient
+        .from('data_entries')
+        .insert([{ value }]);
+      if (error) throw error;
+    } else if (dbStatus === 'connected' && mariaPool) {
       await mariaPool.query("INSERT INTO data_entries (value) VALUES (?)", [value]);
     } else if (sqliteDb) {
       sqliteDb.prepare("INSERT INTO data_entries (value) VALUES (?)").run(value);
@@ -138,7 +164,13 @@ app.post("/api/delete", async (req, res) => {
   if (!id) return res.status(400).json({ error: "ID is required" });
   
   try {
-    if (dbStatus === 'connected' && mariaPool) {
+    if (dbStatus === 'supabase' && supabaseClient) {
+      const { error } = await supabaseClient
+        .from('data_entries')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    } else if (dbStatus === 'connected' && mariaPool) {
       await mariaPool.query("DELETE FROM data_entries WHERE id = ?", [id]);
     } else if (sqliteDb) {
       sqliteDb.prepare("DELETE FROM data_entries WHERE id = ?").run(id);
@@ -151,7 +183,13 @@ app.post("/api/delete", async (req, res) => {
 
 app.post("/api/reset", async (req, res) => {
   try {
-    if (dbStatus === 'connected' && mariaPool) {
+    if (dbStatus === 'supabase' && supabaseClient) {
+      const { error } = await supabaseClient
+        .from('data_entries')
+        .delete()
+        .neq('id', 0); // Delete all
+      if (error) throw error;
+    } else if (dbStatus === 'connected' && mariaPool) {
       await mariaPool.query("DELETE FROM data_entries");
     } else if (sqliteDb) {
       sqliteDb.prepare("DELETE FROM data_entries").run();
