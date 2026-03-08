@@ -1,5 +1,5 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Data Structure Learning Hub",
+  "description": "A comprehensive platform for learning and experimenting with linear and non-linear data structures with MariaDB and SQLite support.",
   "requestFramePermissions": []
 }

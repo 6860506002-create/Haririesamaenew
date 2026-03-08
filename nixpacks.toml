@@ -1,0 +1,2 @@
+[setup]
+pkgs = ["python3", "nodejs_20", "npm-10_x"]
